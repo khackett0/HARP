@@ -5,7 +5,7 @@ from scipy.optimize import curve_fit
 import csv
 
 
-Raw_Data=open('sphere_1.csv', 'r')#these 3 lines in take the data file
+Raw_Data=open('sphere_10cpy.csv', 'r')#these 3 lines in take the data file
 content = Raw_Data.readlines()
 Data=[]
 
@@ -30,13 +30,15 @@ for el in range (len(x)):
 
 
 
-plt.plot(time,volt,'-')  # PLOTS THE entire data run
+"""plt.plot(time,volt,'-')  # PLOTS THE entire data run
 plt.xlabel('time')
 plt.ylabel('voltage')
 plt.title('Full Data Run')
 plt.axis()
-plt.show()
-def Range (duration_of_fit,time,voltage,fit_deg):   #input either 1 or 1/2 for fit degree  data cutting function.
+plt.show()"""
+
+
+def Range (duration_of_fit,time,voltage,fit_deg,file_to_write_to):   # file_to_write_to NEEDS QUOTES  input either 1 or 1/2 for fit degree  data cutting function.
     sample_time=[]
     sample_volt=[]
     noise=[]
@@ -61,10 +63,10 @@ def Range (duration_of_fit,time,voltage,fit_deg):   #input either 1 or 1/2 for f
             sample_volt.append(voltage[el])
 
     if sample_time[0] < 0:  #if the first x value is negitive, this loop shifts all the x values by the amount that makes the first value zero.  This is so that square root fits can be preformed.
+        offset=abs(sample_time[0]) #this is the offset that we will shift all the x values if they start neg.  so we can take sq root fits.
         for el in range(len(sample_time)):
-            sample_time[el]= sample_time[el]+abs(sample_time[0])
-    print sample_time[0]  #prints the begining and ending time element being used.  these should both be positive.
-    print sample_time[len(sample_time)-1]
+            sample_time[el]= sample_time[el]+offset
+
 
 
     negitive_sample_volts = [ -y for y in sample_volt]  #this flips all the voltages so that a decrease in voltage corresponds to a decrease in temp. (more intuititive)
@@ -75,31 +77,97 @@ def Range (duration_of_fit,time,voltage,fit_deg):   #input either 1 or 1/2 for f
         #Linear fit values uses poly fit to change all the voltage values to linear_fit_values= m*x+b.  To be plotted in fit.
         r_squared= r_value*r_value
 
+        print_statement="The linear Regression has the form y=", (np.polyfit(sample_time,negitive_sample_volts,1)[0]) , "x +" ,(np.polyfit(sample_time,negitive_sample_volts,1)[1]) , " With an r^2 value of " , r_squared
 
         plt.plot(sample_time,negitive_sample_volts,'-',sample_time,linear_fit_values,'-')  # plots the sampled portion of data witht the fit.
         plt.xlabel('time')
         plt.ylabel('voltage')
         plt.title('Sample of Data Run')
         plt.axis()
+        #plt.text(.01,-.08,print_statement)
         plt.show()
-        print "The linear Regression has the form y=", (np.polyfit(sample_time,negitive_sample_volts,1)[0]) , "x +" ,(np.polyfit(sample_time,negitive_sample_volts,1)[1]) , " With an r^2 value of " , r_squared
+        #print "The linear Regression has the form y=", (np.polyfit(sample_time,negitive_sample_volts,1)[0]) , "x +" ,(np.polyfit(sample_time,negitive_sample_volts,1)[1]) , " With an r^2 value of " , r_squared
+        
+        #f = open(file_to_write_to,"a") #opens file with name of ".txt"
+        #f.write(str((np.polyfit(sample_time,negitive_sample_volts,1)[0]))+','+str(r_squared)+'\n' )  #writes the slope, r^2 value to that file.
+        #f.close()
 
 
-    if fit_deg == .5:   #wont work becasue there is still negitive values in sample_time
-        def func (x,a,b):
-            return a*np.power(x,1)+b
+    if fit_deg == .5:
+        def func (x,a,b):  #dines the sq root function
+            return a*np.power(x,.5)+b
+
+        popt, pcov= curve_fit(func, sample_time, negitive_sample_volts)  #returns popt[a,b]  coefficients and pcov (2d covariance matrix)
+        #print popt
+
+        residuals = negitive_sample_volts- func(sample_time, popt[0],popt[1])   #this block computes the r^2 from the sq root fit.
+        ss_res = np.sum(residuals**2)
+        ss_tot = np.sum((negitive_sample_volts-np.mean(negitive_sample_volts))**2)
+        r_squared = 1 - (ss_res / ss_tot)
 
 
-        for el in range(len(sample_time)):
-            if sample_time[el]<0:
-                print sample_time[el]
-    popt, pcov= curve_fit(func, sample_time, negitive_sample_volts)
 
-    print popt
+
+        print_statement= 'y=', popt[0] , '*x^(1/2) +' , popt[1]
+
+        plt.plot(sample_time,negitive_sample_volts,'-',sample_time,popt[0]*np.power(sample_time,.5)+popt[1],'-')  # plots the sampled portion of data witht the fit.
+        plt.xlabel('time')
+        plt.ylabel('voltage')
+        plt.title('Sample of Data Run')
+        plt.axis()
+
+        #plt.text(.001, -.04,print_statement, fontsize=12)
+
+        plt.show()
+
+
+        #print print_statement
+        #print r_squared
+
+        #f = open(file_to_write_to,"a") #opens file with name of ".txt"
+        #f.write(str(popt[0])+','+str(r_squared)+'\n' )  #writes the slope, r^2 value to that file.
+        #f.close()
+
+
 
     return sample_time
     return sample_volt
 
-Range(.02,time,volt,.5)
+
+
+def analysis(txt_file):
+    file_name=str(txt_file)
+    Raw=open(file_name, 'r')#these 3 lines in take the data file
+    content = Raw.readlines()
+    Data_analysis=[]
+
+    for lines in content[0:]:
+        lines = lines.strip(',')  # this parses out the data, and gets rid of the commas
+        lines=lines.strip('\r\n')
+        data = lines.split(',')
+        Data_analysis.append(data)  # stores all the raw data in the Data variable
+
+
+    slope=column(Data_analysis,0)
+    r_vals=column(Data_analysis,1)  # parses out the time, the x, and the y column (voltage into separate arrays)
+    slope_array=[]
+    r_array=[]
+
+    for el in range (len(slope)):
+        slope_array.append(float(slope[el])) #floats all the times and voltages  saves them in time and voltage arrays
+        r_array.append(float(r_vals[el]))
+    average_slope=np.mean(slope_array)
+    std_slope=np.std(slope_array)
+    std_r=np.std(r_array)
+    average_r=np.mean(r_array)
+    #print "The average slope is" , average_slope , "with a standard deviation of ", std_slope
+    #print "The average r^2 value is" , average_r , "with a standard deviation of ", std_r
+    return average_slope
+    return average_r
+
+Range(.02,time,volt,1,"Sphere_Data_Linear.csv")
+#analysis("Sphere_Data.txt")
+
+
 
 
